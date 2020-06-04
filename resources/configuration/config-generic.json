@@ -1,0 +1,53 @@
+{
+  "DEBUG": true,
+  "STATIC_FILES_URL": "",
+  "SECRET_KEY": "",
+  "ACCESS_TOKEN_LIFETIME": {
+    "minutes": 60
+  },
+  "REFRESH_TOKEN_LIFETIME": {
+    "minutes": 1440
+  },
+  "DATABASE": {
+    "NAME": "",
+    "USER": "",
+    "PASSWORD": "",
+    "PORT": 5432,
+    "HOST": ""
+  },
+  "TWILIO": {
+    "MOBILE_NUMBER": "",
+    "ACCOUNT_ID": "",
+    "TOKEN": ""
+  },
+  "OTP_MESSAGE": "<#> Your code is {otp_code}. Thank you for using Data4Life.\n{random_hash}",
+  "SUPER_ADMINS": [
+    {
+      "USERNAME": "",
+      "EMAIL": "",
+      "PASSWORD": ""
+    }
+  ],
+  "AREA_SEVERITY_RANKING": {
+    "CLUSTER_SIZE_IN_METRES": ""
+  },
+  "HOTSPOT_PROXIMITY_NOTIFICATIONS": {
+    "PROXIMITY_IN_METRES": "",
+    "DELAY_BETWEEN_NOTIFICATIONS_IN_SECONDS": ""
+  },
+  "HISTORIC_LOCATION_SYNC_CONSENT_QR_CODE_URL": "",
+  "IAM": {
+    "RSA_KEYS": {
+      "kid": "",
+      "kty": "",
+      "alg": "",
+      "use": "",
+      "n": "",
+      "e": ""
+    },
+    "REALM": "",
+    "URL" : "",
+    "ADMIN_USERNAME": "",
+    "ADMIN_PASSWORD": ""
+  }
+}

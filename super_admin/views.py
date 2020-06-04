@@ -1,0 +1,282 @@
+from django.db.models import Q
+from django.conf import settings
+from django.shortcuts import get_object_or_404
+from rest_framework import viewsets, status, generics
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from authentication.models import Region, DataEntryAdmin, DataEntryAdminRegion
+from authentication.permissions import IsCitizen, IsDataEntryAdmin, IsSuperUser
+from core.models import AreaSeverityLevel, RiskAssessmentRecommendation, SelfScreeningQuestion, WellnessStatusOutcome
+from super_admin.serializers import AreaSeverityLevelSerializer, DataEntryAdminSerializerWithPassword, \
+    DataEntryAdminSerializerWithoutPassword, RegionSerializer, RiskAssessmentRecommendationSerializer, \
+    SelfScreeningQuestionSerializer, WellnessStatusOutcomeSerializer
+
+
+class RegionCRUDViewSet(viewsets.ModelViewSet):
+    queryset = Region.objects.all()
+    serializer_class = RegionSerializer
+    permission_classes = (IsAuthenticated, IsSuperUser,)
+
+
+class DataEntryAdminCRUDViewSet(viewsets.ViewSet):
+    serializer_class = DataEntryAdminSerializerWithoutPassword
+    permission_classes = (IsAuthenticated, IsSuperUser,)
+
+    def get_serializer_class(self):
+        serializer_class = self.serializer_class
+        if self.action == "create":
+            serializer_class = DataEntryAdminSerializerWithPassword
+        return serializer_class
+
+    def create(self, request):
+        serializer = self.get_serializer_class()(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def list(self, request):
+        queryset = DataEntryAdmin.objects.all()
+        serializer = self.get_serializer_class()(queryset, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        queryset = DataEntryAdmin.objects.all()
+        data_entry_admin = get_object_or_404(queryset, pk=pk)
+        serializer = self.get_serializer_class()(data_entry_admin)
+
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        queryset = DataEntryAdmin.objects.all()
+        data_entry_admin = get_object_or_404(queryset, pk=pk)
+        data_entry_admin.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def update(self, request, pk=None):
+        queryset = DataEntryAdmin.objects.all()
+        data_entry_admin = get_object_or_404(queryset, pk=pk)
+        serializer = self.get_serializer_class()(data_entry_admin, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data)
+
+
+class DataEntryAdminRegionViewSet(viewsets.ViewSet):
+    serializer_class = DataEntryAdminSerializerWithoutPassword
+    permission_classes = (IsAuthenticated, IsSuperUser,)
+
+    def create(self, request, pk=None, region_id=None):
+        data_entry_admin_query_set = DataEntryAdmin.objects.all()
+        data_entry_admin = get_object_or_404(data_entry_admin_query_set, pk=pk)
+
+        queryset = Region.objects.all()
+        region = get_object_or_404(queryset, pk=region_id)
+
+        try:
+            DataEntryAdminRegion.objects.get(data_entry_admin__id=data_entry_admin.id,
+                                             region__id=region.id)
+        except DataEntryAdminRegion.DoesNotExist:
+            DataEntryAdminRegion.objects.create(data_entry_admin=data_entry_admin,
+                                                region=region)
+
+        serializer = self.serializer_class(data_entry_admin)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, pk=None, region_id=None):
+        data_entry_admin_query_set = DataEntryAdmin.objects.all()
+        data_entry_admin = get_object_or_404(data_entry_admin_query_set, pk=pk)
+
+        queryset = Region.objects.all()
+        region = get_object_or_404(queryset, pk=region_id)
+
+        try:
+            data_entry_admin_region = DataEntryAdminRegion.objects.get(data_entry_admin__id=data_entry_admin.id,
+                                                                       region__id=region.id)
+            data_entry_admin_region.delete()
+
+            serializer = self.serializer_class(data_entry_admin)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except DataEntryAdminRegion.DoesNotExist:
+            response_msg = "Please provide a valid region/data entry admin ID!"
+            response_status = status.HTTP_404_NOT_FOUND
+
+            return Response({"msg": response_msg}, status=response_status)
+
+
+class AreaSeverityLevelCRUDViewSet(viewsets.ViewSet):
+    """
+    AreaSeverityLevelCRUDViewSet
+
+    ViewSet defining actions for managing severity levels in a region.
+
+    Data entry admin is only allowed update, list, retrieve a severity level.
+    Super admin is allowed perform all the CRUD operations on severity level model.
+    """
+    serializer_class = AreaSeverityLevelSerializer
+    permission_classes = (IsAuthenticated, IsSuperUser)
+
+    def get_permissions(self):
+        permission_classes = self.permission_classes
+        if self.action in ('update', 'list', 'retrieve'):
+            permission_classes = (
+                IsAuthenticated, IsSuperUser | IsDataEntryAdmin,)
+        return [permission() for permission in permission_classes]
+
+    def create(self, request, region_pk=None):
+        """
+        For creating a area severity level for a region
+
+        :param request:
+        :param region_pk:
+        :return:
+        """
+        queryset = Region.objects.all()
+        region = get_object_or_404(queryset, pk=region_pk)
+
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(region=region)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def list(self, request, region_pk=None):
+        """
+        For listing all the severity levels associated with a region
+
+        :param request:
+        :param region_pk:
+        :return:
+        """
+        queryset = Region.objects.all()
+        region = get_object_or_404(queryset, pk=region_pk)
+
+        area_severity_level_queryset = AreaSeverityLevel.objects.filter(
+            region__id=region.id)
+        serializer = self.serializer_class(
+            area_severity_level_queryset, many=True)
+
+        return Response(serializer.data)
+
+    def update(self, request, region_pk=None, pk=None):
+        """
+        For updating the severity level for a region
+
+        :param request:
+        :param region_pk:
+        :param pk:
+        :return:
+        """
+        queryset = AreaSeverityLevel.objects.all()
+        area_severity_level = get_object_or_404(
+            queryset, Q(region__id=region_pk), pk=pk)
+
+        serializer = self.serializer_class(
+            area_severity_level, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data)
+
+    def retrieve(self, request, region_pk=None, pk=None):
+        """
+        For retrieving the severity level for a region
+
+        :param request:
+        :param region_pk:
+        :param pk:
+        :return:
+        """
+        queryset = AreaSeverityLevel.objects.all()
+        area_severity_level = get_object_or_404(
+            queryset, Q(region__id=region_pk), pk=pk)
+
+        serializer = self.serializer_class(area_severity_level)
+
+        return Response(serializer.data)
+
+    def destroy(self, request, region_pk=None, pk=None):
+        """
+        For deleting the severity level for a region
+
+        :param request:
+        :param region_pk:
+        :param pk:
+        :return:
+        """
+        queryset = AreaSeverityLevel.objects.all()
+        area_severity_level = get_object_or_404(
+            queryset, Q(region__id=region_pk), pk=pk)
+        area_severity_level.delete()
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RiskAssessmentRecommendationCRUDViewSet(viewsets.ModelViewSet):
+    """
+    RiskAssessmentRecommendationCRUDViewSet
+
+    ViewSet defining CRUD actions for risk assessment recommendations
+
+    List action is also accessible by citizen access tokens
+    """
+    queryset = RiskAssessmentRecommendation.objects.all()
+    serializer_class = RiskAssessmentRecommendationSerializer
+    permission_classes = (IsAuthenticated, IsSuperUser)
+
+    def get_permissions(self):
+        permission_classes = self.permission_classes
+
+        # providing access to citizen access tokens for listing recommendations
+        if self.action in ('list'):
+            permission_classes = (IsAuthenticated, IsSuperUser | IsCitizen,)
+        return [permission() for permission in permission_classes]
+
+
+class SelfScreeningQuestionCRUDViewSet(viewsets.ModelViewSet):
+    """
+    SelfScreeningQuestionCRUDViewSet
+
+    ViewSet defining CRUD actions for self screening questions
+
+    List action is also accessible for citizen access tokens
+    """
+    queryset = SelfScreeningQuestion.objects.all()
+    serializer_class = SelfScreeningQuestionSerializer
+    permission_classes = (IsAuthenticated, IsSuperUser)
+
+    def get_permissions(self):
+        permission_classes = self.permission_classes
+
+        # providing access to citizen access tokens for listing questions
+        if self.action in ('list'):
+            permission_classes = (IsAuthenticated, IsSuperUser | IsCitizen,)
+        return [permission() for permission in permission_classes]
+
+
+class WellnessStatusOutcomeCRUDViewSet(viewsets.ModelViewSet):
+    """
+    WellnessStatusOutcomeCRUDViewSet
+
+    ViewSet defining CRUD actions for wellness status outcomes
+
+    List action is also accessible for citizen access tokens
+    """
+    queryset = WellnessStatusOutcome.objects.all()
+    serializer_class = WellnessStatusOutcomeSerializer
+    permission_classes = (IsAuthenticated, IsSuperUser)
+
+    def get_permissions(self):
+        permission_classes = self.permission_classes
+
+        # providing access to citizen access tokens for listing wellness status outcome
+        if self.action in ('list'):
+            permission_classes = (IsAuthenticated, IsSuperUser | IsCitizen,)
+        return [permission() for permission in permission_classes]
+
+# Todo : Mobile number whitelisting for citizen login
