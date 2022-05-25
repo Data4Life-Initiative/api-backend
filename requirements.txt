@@ -46,7 +46,7 @@ py-vapid==1.7.0
 pyasn1==0.4.8
 pycodestyle==2.6.0
 pycparser==2.20
-PyJWT==1.7.1
+PyJWT==2.4.0
 pylint==2.5.2
 pyparsing==2.4.7
 pyrsistent==0.16.0
